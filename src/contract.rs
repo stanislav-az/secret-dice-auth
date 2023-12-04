@@ -1,20 +1,17 @@
 use cosmwasm_std::{
-    entry_point, to_binary, Deps, DepsMut, Env, Uint128, Coin,
-    MessageInfo, QueryResponse, Response, CosmosMsg, BankMsg,
-    StdError, StdResult
+    entry_point, to_binary, BankMsg, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo,
+    QueryResponse, Response, StdError, StdResult, Uint128,
 };
 
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use sha2::{Digest, Sha256};
 
-use crate::error::{ContractError};
+use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, WinnerResponse};
 use crate::state::{
-    config, config_read, block_height, block_height_read,
-    ContractState, DiceRoller, Winner, State,
+    block_height, block_height_read, config, config_read, ContractState, DiceRoller, State, Winner,
 };
-
 
 //////////////////////////////////////////////////////////////////////
 //////////////////////////////// Init ////////////////////////////////
@@ -27,7 +24,6 @@ pub fn instantiate(
     _info: MessageInfo,
     _msg: InstantiateMsg,
 ) -> StdResult<Response> {
-
     let state = State::default();
     config(deps.storage).save(&state)?;
 
@@ -72,37 +68,30 @@ pub fn try_join(
             deposit_funds(&info)?;
             state.player_1 = Some(DiceRoller::new(name, info.sender, secret));
             state.state = ContractState::Got1;
-        },
+        }
         ContractState::Got1 => {
             deposit_funds(&info)?;
             state.player_2 = Some(DiceRoller::new(name, info.sender, secret));
             state.state = ContractState::Got2;
-        },
+        }
         ContractState::Got2 => {
             // We already have both players
             return Err(ContractError::GameIsFull);
-        },
+        }
         ContractState::Done => {
             // Game is already over
             return Err(ContractError::GameIsAlreadyOver);
-        },
+        }
     }
 
     config(deps.storage).save(&state)?;
 
-    Ok(Response::new()
-        .add_attribute("action", "join"))
+    Ok(Response::new().add_attribute("action", "join"))
 }
 
-fn deposit_funds(
-    info: &MessageInfo,
-) -> Result<Response, ContractError> {
-
+fn deposit_funds(info: &MessageInfo) -> Result<Response, ContractError> {
     let amount = Uint128::new(1_000_000 /* 1mn uscrt = 1 SCRT */);
-    if info.funds.len() != 1
-        || info.funds[0].amount != amount
-        || info.funds[0].denom != *"uscrt"
-    {
+    if info.funds.len() != 1 || info.funds[0].amount != amount || info.funds[0].denom != *"uscrt" {
         return Err(ContractError::MustDepositScrtToPlay);
     }
 
@@ -129,19 +118,23 @@ pub fn try_roll_dice(
     match state.state {
         ContractState::Init => {
             return Err(ContractError::StillWaitingForPlayers);
-        },
+        }
         ContractState::Got1 => {
             return Err(ContractError::StillWaitingForPlayers);
-        },
+        }
         ContractState::Got2 => {
             // get players
             let player_1 = if let Some(player_1) = &state.player_1 {
-              player_1
-            } else { return Err(ContractError::StillWaitingForPlayers) };
+                player_1
+            } else {
+                return Err(ContractError::StillWaitingForPlayers);
+            };
 
             let player_2 = if let Some(player_2) = &state.player_2 {
-              player_2
-            } else { return Err(ContractError::StillWaitingForPlayers) };
+                player_2
+            } else {
+                return Err(ContractError::StillWaitingForPlayers);
+            };
 
             // validate players
             if player_1.addr() != &info.sender && player_2.addr() != &info.sender {
@@ -155,22 +148,16 @@ pub fn try_roll_dice(
             combined_secret.extend(&player_2.secret().to_be_bytes());
             combined_secret.extend(env.block.time.to_string().as_bytes());
 
-            let random_seed: [u8;32] = Sha256::digest(&combined_secret).into();
+            let random_seed: [u8; 32] = Sha256::digest(&combined_secret).into();
             let mut rng = ChaChaRng::from_seed(random_seed);
 
-            dice_roll = ((rng.next_u32() % 6) + 1) as u8;   // a number between 1 and 6
+            dice_roll = ((rng.next_u32() % 6) + 1) as u8; // a number between 1 and 6
             state.dice_roll = Some(dice_roll);
 
             let winner: Winner = if (1..=3).contains(&dice_roll) {
-                Winner::new(
-                    player_1.name().to_string(),
-                    player_1.addr().clone()
-                )
+                Winner::new(player_1.name().to_string(), player_1.addr().clone())
             } else {
-                Winner::new(
-                    player_2.name().to_string(),
-                    player_2.addr().clone()
-                )
+                Winner::new(player_2.name().to_string(), player_2.addr().clone())
             };
             println!("dice roll = {}", dice_roll);
             println!("winner is {}", winner.name());
@@ -183,12 +170,11 @@ pub fn try_roll_dice(
                 to_address: winner.addr().to_string(),
                 amount: vec![Coin::new(2_000_000, "uscrt")],
             }));
-
-        },
+        }
         // Has a player already won the game?
         ContractState::Done => {
             return Err(ContractError::GameIsAlreadyOver);
-        },
+        }
     }
 
     config(deps.storage).save(&state)?;
@@ -199,10 +185,7 @@ pub fn try_roll_dice(
         .add_attribute("result", dice_roll.to_string()))
 }
 
-pub fn try_leave(
-    deps: DepsMut,
-    info: MessageInfo,
-) -> Result<Response, ContractError> {
+pub fn try_leave(deps: DepsMut, info: MessageInfo) -> Result<Response, ContractError> {
     let mut state = config(deps.storage).load()?;
 
     let player_1 = if let Some(player_1) = &state.player_1 {
@@ -237,10 +220,7 @@ pub fn try_leave(
 
     Ok(Response::new()
         .add_messages(messages)
-        .add_attributes(vec![
-            ("action", "leave"),
-            ("receiver", player_1.name()),
-    ]))
+        .add_attributes(vec![("action", "leave"), ("receiver", player_1.name())]))
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -248,21 +228,13 @@ pub fn try_leave(
 ///////////////////////////////////////////////////////////////////////
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(
-    deps: Deps,
-    env: Env,
-    msg: QueryMsg
-) -> StdResult<QueryResponse> {
+pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<QueryResponse> {
     match msg {
         QueryMsg::WhoWon {} => to_binary(&query_who_won(deps, env)?),
     }
 }
 
-fn query_who_won(
-    deps: Deps,
-    env: Env,
-) -> StdResult<WinnerResponse> {
-
+fn query_who_won(deps: Deps, env: Env) -> StdResult<WinnerResponse> {
     let state = config_read(deps.storage).load()?;
 
     if state.state != ContractState::Done {
@@ -274,9 +246,8 @@ fn query_who_won(
     let current_height = env.block.height;
 
     if current_height <= winner_height {
-        return Err(
-            StdError::generic_err(
-                "Querying who won is not allowed until after the winner has been finalized."
+        return Err(StdError::generic_err(
+            "Querying who won is not allowed until after the winner has been finalized.",
         ));
     }
 
@@ -297,7 +268,7 @@ fn query_who_won(
         addr: winner.addr().clone(),
         dice_roll,
     };
-        
+
     Ok(resp)
 }
 
@@ -305,7 +276,9 @@ fn query_who_won(
 mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{coins, Coin, from_binary, QueryRequest, BankQuery::Balance, BalanceResponse};
+    use cosmwasm_std::{
+        coins, from_binary, BalanceResponse, BankQuery::Balance, Coin, QueryRequest,
+    };
 
     #[test]
     fn proper_instantialization() {
@@ -330,7 +303,10 @@ mod tests {
 
         // Player 1 joins the game
         let secret = Uint128::new(1234u128);
-        let msg = ExecuteMsg::Join {name: "alice".to_string(), secret: secret};
+        let msg = ExecuteMsg::Join {
+            name: "alice".to_string(),
+            secret: secret,
+        };
         let info = mock_info("alice", &coins(1_000_000, "uscrt"));
         let _res = execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -338,7 +314,9 @@ mod tests {
         let err = execute(deps.as_mut(), env, info, ExecuteMsg::RollDice {}).unwrap_err();
         match err {
             ContractError::StillWaitingForPlayers {} => assert!(true),
-            _e => { assert!(false) }
+            _e => {
+                assert!(false)
+            }
         }
     }
 
@@ -353,7 +331,10 @@ mod tests {
 
         // Player 1 joins the game
         let secret = Uint128::new(1234u128);
-        let msg = ExecuteMsg::Join {name: "alice".to_string(), secret: secret};
+        let msg = ExecuteMsg::Join {
+            name: "alice".to_string(),
+            secret: secret,
+        };
         let info = mock_info("alice", &coins(1_000_000, "uscrt"));
         let _res = execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
@@ -372,13 +353,19 @@ mod tests {
 
         // Player 1 joins the game
         let secret = Uint128::new(1234u128);
-        let msg = ExecuteMsg::Join {name: "alice".to_string(), secret: secret};
+        let msg = ExecuteMsg::Join {
+            name: "alice".to_string(),
+            secret: secret,
+        };
         let info_player_1 = mock_info("alice", &coins(1_000_000, "uscrt"));
         let _res = execute(deps.as_mut(), env.clone(), info_player_1.clone(), msg).unwrap();
 
         // Player 2 joins the game
         let secret = Uint128::new(5678u128);
-        let msg = ExecuteMsg::Join {name: "bob".to_string(), secret: secret};
+        let msg = ExecuteMsg::Join {
+            name: "bob".to_string(),
+            secret: secret,
+        };
         let info_player_2 = mock_info("bob", &coins(1_000_000, "uscrt"));
         let _res = execute(deps.as_mut(), env.clone(), info_player_2, msg).unwrap();
 
@@ -389,7 +376,7 @@ mod tests {
             e => {
                 assert!(false);
                 panic!("error: {}", e);
-            },
+            }
         }
     }
 
@@ -404,13 +391,19 @@ mod tests {
 
         // Player 1 joins the game
         let secret = Uint128::new(1234u128);
-        let msg = ExecuteMsg::Join {name: "alice".to_string(), secret: secret};
+        let msg = ExecuteMsg::Join {
+            name: "alice".to_string(),
+            secret: secret,
+        };
         let info = mock_info("alice", &coins(1_000_000, "uscrt"));
         let _res = execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
         // Player 2 joins the game
         let secret = Uint128::new(5678u128);
-        let msg = ExecuteMsg::Join {name: "bob".to_string(), secret: secret};
+        let msg = ExecuteMsg::Join {
+            name: "bob".to_string(),
+            secret: secret,
+        };
         let info = mock_info("bob", &coins(1_000_000, "uscrt"));
         let _res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
@@ -422,7 +415,7 @@ mod tests {
             e => {
                 assert!(false);
                 panic!("error: {}", e);
-            },
+            }
         }
 
         let info = mock_info("ted", &coins(1_000_000, "uscrt"));
@@ -432,7 +425,7 @@ mod tests {
             e => {
                 assert!(false);
                 panic!("error: {}", e);
-            },
+            }
         }
     }
 
@@ -447,27 +440,36 @@ mod tests {
 
         // Player 1 joins the game
         let secret = Uint128::new(1234u128);
-        let msg = ExecuteMsg::Join {name: "alice".to_string(), secret: secret};
+        let msg = ExecuteMsg::Join {
+            name: "alice".to_string(),
+            secret: secret,
+        };
         let info = mock_info("alice", &coins(1_000_000, "uscrt"));
         let _res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
         // Player 2 joins the game
         let secret = Uint128::new(5678u128);
-        let msg = ExecuteMsg::Join {name: "bob".to_string(), secret: secret};
+        let msg = ExecuteMsg::Join {
+            name: "bob".to_string(),
+            secret: secret,
+        };
         let info = mock_info("bob", &coins(1_000_000, "uscrt"));
         let _res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
         // A 3rd player tries to join
         let secret = Uint128::new(9810u128);
         let info = mock_info("ted", &coins(1_000_000, "uscrt"));
-        let msg = ExecuteMsg::Join {name: "ted".to_string(), secret: secret};
+        let msg = ExecuteMsg::Join {
+            name: "ted".to_string(),
+            secret: secret,
+        };
         let err = execute(deps.as_mut(), env, info, msg).unwrap_err();
         match err {
             ContractError::GameIsFull {} => assert!(true),
             e => {
                 assert!(false);
                 panic!("error: {}", e);
-            },
+            }
         }
     }
 
@@ -482,20 +484,28 @@ mod tests {
 
         // Player 1 joins the game
         let secret = Uint128::new(1234u128);
-        let msg = ExecuteMsg::Join {name: "alice".to_string(), secret: secret};
+        let msg = ExecuteMsg::Join {
+            name: "alice".to_string(),
+            secret: secret,
+        };
         let info = mock_info("alice", &coins(1_000_000, "uscrt"));
         let _res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
         // Player 2 joins the game
         let secret = Uint128::new(5678u128);
-        let msg = ExecuteMsg::Join {name: "bob".to_string(), secret: secret};
+        let msg = ExecuteMsg::Join {
+            name: "bob".to_string(),
+            secret: secret,
+        };
         let info = mock_info("bob", &coins(1_000_000, "uscrt"));
         let _res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
         // there should be no winner yet since we didn't do a dice roll!
         let err = query(deps.as_ref(), env, QueryMsg::WhoWon {}).unwrap_err();
         match err {
-            _ => { assert!(true) }
+            _ => {
+                assert!(true)
+            }
         }
     }
 
@@ -510,13 +520,19 @@ mod tests {
 
         // Player 1 joins the game
         let secret_1 = Uint128::new(1234u128);
-        let msg_player_1 = ExecuteMsg::Join {name: "alice".to_string(), secret: secret_1};
+        let msg_player_1 = ExecuteMsg::Join {
+            name: "alice".to_string(),
+            secret: secret_1,
+        };
         let info = mock_info("alice", &coins(1_000_000, "uscrt"));
         let _res = execute(deps.as_mut(), env.clone(), info, msg_player_1).unwrap();
 
         // Player 2 joins the game
         let secret_2 = Uint128::new(5678u128);
-        let msg_player_2 = ExecuteMsg::Join {name: "bob".to_string(), secret: secret_2};
+        let msg_player_2 = ExecuteMsg::Join {
+            name: "bob".to_string(),
+            secret: secret_2,
+        };
         let info = mock_info("bob", &coins(1_000_000, "uscrt"));
         let _res = execute(deps.as_mut(), env.clone(), info.clone(), msg_player_2).unwrap();
 
@@ -543,17 +559,29 @@ mod tests {
         let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
 
         let secret_1 = Uint128::new(1234u128);
-        let msg_player_1 = ExecuteMsg::Join {name: "alice".to_string(), secret: secret_1};
+        let msg_player_1 = ExecuteMsg::Join {
+            name: "alice".to_string(),
+            secret: secret_1,
+        };
         let info = mock_info("alice", &coins(1_000_000, uscrt_denom.clone()));
         let _res = execute(deps.as_mut(), env.clone(), info, msg_player_1).unwrap();
 
         let secret_2 = Uint128::new(5678u128);
-        let msg_player_2 = ExecuteMsg::Join {name: "bob".to_string(), secret: secret_2};
+        let msg_player_2 = ExecuteMsg::Join {
+            name: "bob".to_string(),
+            secret: secret_2,
+        };
         let info = mock_info("bob", &coins(1_000_000, uscrt_denom.clone()));
         let _res = execute(deps.as_mut(), env.clone(), info.clone(), msg_player_2).unwrap();
 
         // player 2 rolls the dice
-        let _res = execute(deps.as_mut(), env.clone(), info.clone(), ExecuteMsg::RollDice {}).unwrap();
+        let _res = execute(
+            deps.as_mut(),
+            env.clone(),
+            info.clone(),
+            ExecuteMsg::RollDice {},
+        )
+        .unwrap();
 
         // advance block height by 1 to be able to query for winner
         env.block.height += 1;
@@ -561,13 +589,16 @@ mod tests {
         let value: WinnerResponse = from_binary(&res).unwrap();
         assert_eq!(value.name.is_empty(), false);
 
-        let msg = QueryRequest::Bank(
-            Balance {
-                address: value.addr.to_string(),
-                denom: uscrt_denom.clone(),
-            });
-        let _value: BalanceResponse = from_binary(&deps.querier.handle_query(&msg).unwrap().unwrap()).unwrap();
-        let _expected_amount = Coin { amount: Uint128::new(2_000_000), denom: uscrt_denom };
+        let msg = QueryRequest::Bank(Balance {
+            address: value.addr.to_string(),
+            denom: uscrt_denom.clone(),
+        });
+        let _value: BalanceResponse =
+            from_binary(&deps.querier.handle_query(&msg).unwrap().unwrap()).unwrap();
+        let _expected_amount = Coin {
+            amount: Uint128::new(2_000_000),
+            denom: uscrt_denom,
+        };
 
         // TODO: verify winner's balance has increased by 2 SCRT
         // assert_eq!(value.amount, Coin { amount: Uint128::new(2_000_000), denom: uscrt_denom });
@@ -585,13 +616,19 @@ mod tests {
 
         // Player 1 joins the game
         let secret = Uint128::new(1234u128);
-        let msg = ExecuteMsg::Join {name: "alice".to_string(), secret: secret};
+        let msg = ExecuteMsg::Join {
+            name: "alice".to_string(),
+            secret: secret,
+        };
         let player_1_info = mock_info("alice", &coins(1_000_000, "uscrt"));
         let _res = execute(deps.as_mut(), env.clone(), player_1_info.clone(), msg).unwrap();
 
         // Player 2 joins the game
         let secret = Uint128::new(5678u128);
-        let msg = ExecuteMsg::Join {name: "bob".to_string(), secret: secret};
+        let msg = ExecuteMsg::Join {
+            name: "bob".to_string(),
+            secret: secret,
+        };
         let player_2_info = mock_info("bob", &coins(1_000_000, "uscrt"));
         let _res = execute(deps.as_mut(), env.clone(), player_2_info.clone(), msg).unwrap();
 
@@ -606,7 +643,7 @@ mod tests {
             e => {
                 assert!(false);
                 panic!("error: {}", e);
-            },
+            }
         }
     }
 }

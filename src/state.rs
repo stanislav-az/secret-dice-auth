@@ -1,8 +1,5 @@
-use cosmwasm_std::{Addr, Uint128, Storage};
-use cosmwasm_storage::{
-    ReadonlySingleton, singleton, Singleton,
-    singleton_read,
-};
+use cosmwasm_std::{Addr, Storage, Uint128};
+use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton};
 
 use serde::{Deserialize, Serialize};
 
@@ -35,7 +32,7 @@ pub enum ContractState {
     Init,
     Got1,
     Got2,
-    Done
+    Done,
 }
 
 impl Default for ContractState {
@@ -51,7 +48,7 @@ impl From<u8> for ContractState {
             1 => ContractState::Got1,
             2 => ContractState::Got2,
             3 => ContractState::Done,
-            _ => ContractState::Init
+            _ => ContractState::Init,
         }
     }
 }
@@ -71,7 +68,7 @@ impl From<ContractState> for u8 {
 pub struct DiceRoller {
     name: String,
     addr: Addr,
-    secret: Uint128
+    secret: Uint128,
 }
 
 impl Default for DiceRoller {
@@ -79,20 +76,16 @@ impl Default for DiceRoller {
         DiceRoller {
             name: String::from(""),
             addr: Addr::unchecked(""),
-            secret: Uint128::from(0u32)
+            secret: Uint128::from(0u32),
         }
     }
 }
 
 impl DiceRoller {
     /// Constructor function. Takes input parameters and initializes a struct containing both
-    /// those 
+    /// those
     pub fn new(name: String, addr: Addr, secret: Uint128) -> DiceRoller {
-        DiceRoller {
-            name,
-            addr,
-            secret
-        }
+        DiceRoller { name, addr, secret }
     }
 
     /// Viewer function to read the private member of the DiceRoller struct.
@@ -121,10 +114,7 @@ impl Winner {
     /// Constructor function. Takes input parameters and initializes a struct containing both
     /// those items
     pub fn new(name: String, addr: Addr) -> Winner {
-        Winner {
-            name,
-            addr
-        }
+        Winner { name, addr }
     }
 
     /// Viewer function to read the private member of the Winner struct.

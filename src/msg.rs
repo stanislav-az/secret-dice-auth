@@ -1,5 +1,5 @@
+use cosmwasm_std::{Addr, Api, StdResult, Uint128};
 use serde::{Deserialize, Serialize};
-use cosmwasm_std::{Addr, Uint128};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct InstantiateMsg {}
@@ -7,15 +7,30 @@ pub struct InstantiateMsg {}
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
+    // contract features:
     Join { name: String, secret: Uint128 },
     RollDice {},
     Leave {},
+    // authenticated queries:
+    CreateViewingKey {},
+    SetViewingKey { key: String },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    WhoWon {},
+    WhoWon { address: Addr, key: String },
+}
+
+impl QueryMsg {
+    pub fn get_validation_params(&self, api: &dyn Api) -> StdResult<(Addr, String)> {
+        match self {
+            QueryMsg::WhoWon { address, key } => {
+                let addr = api.addr_validate(address.as_str())?;
+                Ok((addr, key.clone()))
+            }
+        }
+    }
 }
 
 /// We define a custom struct for each query response
