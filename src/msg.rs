@@ -2,7 +2,9 @@ use cosmwasm_std::{Addr, Api, StdResult, Uint128};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct InstantiateMsg {}
+pub struct InstantiateMsg {
+    pub prng_seed_entropy: String,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -12,7 +14,7 @@ pub enum ExecuteMsg {
     RollDice {},
     Leave {},
     // authenticated queries:
-    CreateViewingKey {},
+    CreateViewingKey { entropy: String },
     SetViewingKey { key: String },
 }
 
@@ -39,4 +41,10 @@ pub struct WinnerResponse {
     pub name: String,
     pub addr: Addr,
     pub dice_roll: u8,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecuteAnswer {
+    CreateViewingKey { key: String },
 }

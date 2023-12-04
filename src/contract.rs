@@ -2,16 +2,17 @@ use cosmwasm_std::{
     entry_point, to_binary, BankMsg, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo,
     QueryResponse, Response, StdError, StdResult, Uint128,
 };
+use secret_toolkit::viewing_key::{ViewingKey, ViewingKeyStore};
 
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use sha2::{Digest, Sha256};
 
-use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, WinnerResponse};
 use crate::state::{
     block_height, block_height_read, config, config_read, ContractState, DiceRoller, State, Winner,
 };
+use crate::{error::ContractError, msg::ExecuteAnswer};
 
 //////////////////////////////////////////////////////////////////////
 //////////////////////////////// Init ////////////////////////////////
@@ -22,8 +23,11 @@ pub fn instantiate(
     deps: DepsMut,
     _env: Env,
     _info: MessageInfo,
-    _msg: InstantiateMsg,
+    msg: InstantiateMsg,
 ) -> StdResult<Response> {
+    let prng_seed = Sha256::digest(msg.prng_seed_entropy.as_bytes());
+    ViewingKey::set_seed(deps.storage, &prng_seed);
+
     let state = State::default();
     config(deps.storage).save(&state)?;
 
@@ -45,7 +49,36 @@ pub fn execute(
         ExecuteMsg::Join { name, secret } => try_join(deps, info, name, secret),
         ExecuteMsg::RollDice {} => try_roll_dice(deps, env, info),
         ExecuteMsg::Leave {} => try_leave(deps, info),
+        ExecuteMsg::CreateViewingKey { entropy } => try_create_key(deps, env, info, entropy),
+        ExecuteMsg::SetViewingKey { key } => try_set_key(deps, info, key),
     }
+}
+
+pub fn try_set_key(
+    deps: DepsMut,
+    info: MessageInfo,
+    key: String,
+) -> Result<Response, ContractError> {
+    ViewingKey::set(deps.storage, info.sender.as_str(), &key);
+    Ok(Response::default())
+}
+
+pub fn try_create_key(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    entropy: String,
+) -> Result<Response, ContractError> {
+    let key: String = ViewingKey::create(
+        deps.storage,
+        &info,
+        &env,
+        info.sender.as_str(),
+        entropy.as_bytes(),
+    );
+    let resp = ExecuteAnswer::CreateViewingKey { key };
+
+    Ok(Response::new().set_data(to_binary(&resp)?))
 }
 
 pub fn try_join(
