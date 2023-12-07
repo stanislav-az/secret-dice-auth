@@ -9,9 +9,7 @@ use rand_chacha::ChaChaRng;
 use sha2::{Digest, Sha256};
 
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg, WinnerResponse};
-use crate::state::{
-    block_height, block_height_read, config, config_read, ContractState, DiceRoller, State, Winner,
-};
+use crate::state::{ContractState, DiceRoller, State, Winner, BLOCK_HEIGHT, CONFIG};
 use crate::{error::ContractError, msg::ExecuteAnswer};
 
 //////////////////////////////////////////////////////////////////////
@@ -29,7 +27,7 @@ pub fn instantiate(
     ViewingKey::set_seed(deps.storage, &prng_seed);
 
     let state = State::default();
-    config(deps.storage).save(&state)?;
+    CONFIG.save(deps.storage, &state)?;
 
     Ok(Response::default())
 }
@@ -59,7 +57,7 @@ pub fn try_set_key(
     info: MessageInfo,
     key: String,
 ) -> Result<Response, ContractError> {
-    let () = check_sender_is_player(&config_read(deps.storage).load()?, info.sender.as_str())?;
+    let () = check_sender_is_player(&CONFIG.load(deps.storage)?, info.sender.as_str())?;
 
     ViewingKey::set(deps.storage, info.sender.as_str(), &key);
     Ok(Response::default())
@@ -71,7 +69,7 @@ pub fn try_create_key(
     info: MessageInfo,
     entropy: String,
 ) -> Result<Response, ContractError> {
-    let () = check_sender_is_player(&config_read(deps.storage).load()?, info.sender.as_str())?;
+    let () = check_sender_is_player(&CONFIG.load(deps.storage)?, info.sender.as_str())?;
 
     let key: String = ViewingKey::create(
         deps.storage,
@@ -105,7 +103,7 @@ pub fn try_join(
     name: String,
     secret: Uint128,
 ) -> Result<Response, ContractError> {
-    let mut state: State = config(deps.storage).load()?;
+    let mut state: State = CONFIG.load(deps.storage)?;
 
     // player 1 joins, sends a secret and deposits 1 SCRT to the contract
     // player 1's secret is stored privately
@@ -135,7 +133,7 @@ pub fn try_join(
         }
     }
 
-    config(deps.storage).save(&state)?;
+    CONFIG.save(deps.storage, &state)?;
 
     Ok(Response::new().add_attribute("action", "join"))
 }
@@ -154,7 +152,7 @@ pub fn try_roll_dice(
     env: Env,
     info: MessageInfo,
 ) -> Result<Response, ContractError> {
-    let mut state: State = config(deps.storage).load()?;
+    let mut state: State = CONFIG.load(deps.storage)?;
 
     // once player 2 joins, we can derive a shared secret that no one knows
     // then we can roll the dice and choose a winner
@@ -192,8 +190,8 @@ pub fn try_roll_dice(
                 return Err(ContractError::YouAreNotAPlayer);
             }
 
-            // saving the block height so that the winner cannpt be queried in the same block
-            block_height(deps.storage).save(&env.block.height)?;
+            // saving the block height so that the winner cannot be queried in the same block
+            BLOCK_HEIGHT.save(deps.storage, &env.block.height)?;
 
             let mut combined_secret: Vec<u8> = player_1.secret().to_be_bytes().to_vec();
             combined_secret.extend(&player_2.secret().to_be_bytes());
@@ -228,7 +226,7 @@ pub fn try_roll_dice(
         }
     }
 
-    config(deps.storage).save(&state)?;
+    CONFIG.save(deps.storage, &state)?;
 
     Ok(Response::new()
         .add_messages(messages)
@@ -237,7 +235,7 @@ pub fn try_roll_dice(
 }
 
 pub fn try_leave(deps: DepsMut, info: MessageInfo) -> Result<Response, ContractError> {
-    let mut state: State = config(deps.storage).load()?;
+    let mut state: State = CONFIG.load(deps.storage)?;
 
     let player_1 = if let Some(player_1) = &state.player_1 {
         player_1
@@ -261,7 +259,7 @@ pub fn try_leave(deps: DepsMut, info: MessageInfo) -> Result<Response, ContractE
 
     state.state = ContractState::Init;
 
-    config(deps.storage).save(&state)?;
+    CONFIG.save(deps.storage, &state)?;
 
     // Player 1 leaves the game before another player can join, and gets a refund on their deposit
     let messages: Vec<CosmosMsg> = vec![CosmosMsg::Bank(BankMsg::Send {
@@ -290,14 +288,14 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<QueryResponse> {
 }
 
 fn query_who_won(deps: Deps, env: Env) -> StdResult<WinnerResponse> {
-    let state: State = config_read(deps.storage).load()?;
+    let state: State = CONFIG.load(deps.storage)?;
 
     if state.state != ContractState::Done {
         return Err(StdError::generic_err("No winner yet."));
     }
 
     // check that the query is happening after the block where the winner is decided
-    let winner_height = block_height_read(deps.storage).load()?;
+    let winner_height = BLOCK_HEIGHT.load(deps.storage)?;
     let current_height = env.block.height;
 
     if current_height <= winner_height {

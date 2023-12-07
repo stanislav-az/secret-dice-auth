@@ -1,10 +1,11 @@
-use cosmwasm_std::{Addr, Storage, Uint128};
-use cosmwasm_storage::{singleton, singleton_read, ReadonlySingleton, Singleton};
+use cosmwasm_std::{Addr, Uint128};
+use secret_toolkit::serialization::{Bincode2, Json};
+use secret_toolkit::storage::Item;
 
 use serde::{Deserialize, Serialize};
 
-const CONFIG_KEY: &[u8] = b"config";
-const BLOCK_HEIGHT_KEY: &[u8] = b"block_height";
+pub static CONFIG: Item<State, Json> = Item::new(b"config");
+pub static BLOCK_HEIGHT: Item<u64, Bincode2> = Item::new(b"block_height");
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct State {
@@ -127,20 +128,4 @@ impl Winner {
     pub fn addr(&self) -> &Addr {
         &self.addr
     }
-}
-
-pub fn config(storage: &mut dyn Storage) -> Singleton<State> {
-    singleton(storage, CONFIG_KEY)
-}
-
-pub fn config_read(storage: &dyn Storage) -> ReadonlySingleton<State> {
-    singleton_read(storage, CONFIG_KEY)
-}
-
-pub fn block_height(storage: &mut dyn Storage) -> Singleton<u64> {
-    singleton(storage, BLOCK_HEIGHT_KEY)
-}
-
-pub fn block_height_read(storage: &dyn Storage) -> ReadonlySingleton<u64> {
-    singleton_read(storage, BLOCK_HEIGHT_KEY)
 }
